@@ -109,10 +109,8 @@ models_df =
   ) %>% 
   select(city_state, term, OR, lower_CI,upper_CI)
 
-
 models_df
 ```
-
 
 Create a plot that shows the estimated ORs and CIs for each city. Organize cities according to estimated OR, and comment on the plot.
 
@@ -135,6 +133,132 @@ models_df
 
 Description：This graph shows that the estimated ORs are different among the major 50 cities in the U.S. New York has the lowest estimated OR, which indicates that homicide victims in New York are much less likely to be solved by men than by women. In addition to the highest estimated OR in Albuquerque, it is also clear from this graph that there are many cities with wide confidence intervals, such as Fresno,CA, Stockton,CA, Albuquerque,NM and Stockton,CA.
   
+###Problem 3:
+
+##Step 1: import the data and clean the data.
+
+```{r}
+birthweight_df = read_csv("./data/birthweight.csv")
+
+birthweight_df = 
+  birthweight_df %>% 
+  janitor::clean_names() %>% 
+  drop_na() %>% 
+  filter(frace != "Unknown") %>%
+ mutate(
+    babysex = case_when(babysex == 1 ~ "male",babysex == 2 ~ "female"),
+    malform = case_when(malform == 0 ~ "absent",malform == 1 ~ "present"),
+    frace = case_when(frace == 1 ~ "White",frace == 2 ~ "Black",frace == 3 ~ "Asian",frace == 4 ~ "Puerto Rican",frace == 8 ~ "Other"),
+    mrace = case_when(mrace == 1 ~ "White",mrace == 2 ~ "Black",mrace == 3 ~ "Asian",mrace == 4 ~ "Puerto Rican",mrace == 8 ~ "Other")
+  ) %>% 
+ mutate(
+    babysex = as.factor(babysex),
+    frace = as.factor(frace),
+    malform = as.factor(malform),
+    mrace = as.factor(mrace)
+    ) 
+sum(is.na(birthweight_df))
 
 
+birthweight_df
+
+```
+
+Description：There is no missing data. This database totally has 20 columns and 4342 rows.
+
+
+Propose a regression model for birthweight. This model may be based on a hypothesized structure for the factors that underly birthweight, on a data-driven model-building process, or a combination of the two. Describe your modeling process and show a plot of model residuals against fitted values – use add_predictions and add_residuals in making this plot.
+
+##Step 1: builed a model
+
+Among these variables, I believe that in addition to head circumference, length, sex, ength at birth and gestational age, there are other variables that can affect the birth weight of an infant, these are fincome, smoken and ppbmi.
+Therefore, I made the following hypothesis:
+1.The higher the monthly household income, the better quality food the mother receives and therefore the heavier the baby.
+2.Mothers who smoke, resulting in babies born with deformities or malnutrition.
+3.The higher the mother's pre-pregnancy BMI, the greater the resulting infant weight.
+
+```{r}
+model_1 = lm(bwt ~ fincome + smoken + ppbmi, data = birthweight_df)
+broom::tidy(model_1)
+model_1
+```
+
+##Step 2: use add_predictions and add_residuals in making this plot
+
+```{r}
+birthweight_df %>% 
+  add_predictions(model_1) %>% 
+  add_residuals(model_1) %>% 
+  ggplot(aes(x = pred, y = resid)) + 
+  geom_point(alpha = .5) +
+  geom_smooth(method = "lm") + 
+  labs(title = "Figure 2:Fitted values against residuals", 
+       x = "Fitted values", 
+       y = "Residuals")
+```
+
+Description：The residuals are distributed around 0 along the fitted values - without showing any pattern associated with the fitted values.
+
+
+##Step 3: Compare your model to two others:
+```{r}
+model_2 = lm(bwt ~ blength + gaweeks, data = birthweight_df)
+  model_2 %>%
+  broom::tidy()
+```
+
+```{r}
+model_3 = lm(bwt ~ bhead + babysex + blength + bhead * babysex + bhead * blength + babysex * blength + babysex * blength * bhead, data = birthweight_df)
+  model_3 %>% 
+  broom::tidy()
+```
+
+##Step 4: Test the model fit
+
+```{r}
+set.seed(1)
+cv_df = 
+  crossv_mc(birthweight_df, 100) %>% 
+  mutate(
+    train = map(train, as_tibble),
+    test = map(test, as_tibble)
+  )
+```
+
+##Step 5: Make this comparison in terms of the cross-validated prediction error:
+```{r}
+cv_df = 
+  cv_df %>% 
+  mutate(
+    model_1 = map(.x = train, ~ lm(bwt ~ fincome + smoken + ppbmi, data = .x)),
+    model_2 = map(.x = train, ~lm(bwt ~ blength + gaweeks, data = .x)),
+    model_3 = map(.x = train, ~lm(bwt ~ bhead + babysex + blength + bhead * babysex + bhead * blength + babysex * blength + babysex * blength * bhead, data = .x))
+    )%>% 
+  mutate(
+    rmse_model_1 = map2_dbl(.x = model_1, .y = test, ~rmse(model = .x, data = .y)),
+    rmse_model_2 = map2_dbl(.x = model_2, .y = test, ~rmse(model = .x, data = .y)),
+    rmse_model_3 = map2_dbl(.x = model_3, .y = test, ~rmse(model = .x, data = .y))
+  )
+
+```
+
+##Step 6:Draw a violin plot:
+```{r}
+cv_df %>% 
+  select(starts_with("rmse")) %>% 
+  pivot_longer(
+    everything(),
+    names_to = "model",
+    values_to = "rmse",
+    names_prefix = "rmse_") %>% 
+  ggplot(aes(x = model, y = rmse)) +
+  labs(
+    title = 'Figure 3:Three Models',
+    x = 'Model',
+    y = 'rmse')+
+   geom_violin()
+  
+```
+
+Description：The graph above compares the prediction errors of the three models and we clearly find that model_3 is the best model because it has the lowest RMSE value compared to the other two models（model_1 and model_2). This indicates that using head circumference, length, sex, and all interactions is the best model, which also means that it can predict the birth weight of the child better than model_1 and model_2.
  

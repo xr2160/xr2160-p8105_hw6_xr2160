@@ -155,7 +155,7 @@ victims to female victims. Do this within a “tidy” pipeline, making use
 of purrr::map, list columns, and unnest as necessary to create a
 dataframe with estimated ORs and CIs for each city.
 
-\###Step 4 :Run regression models across cities
+\##Step 4 :Run regression models across cities
 
 ``` r
 models_df = 
@@ -173,7 +173,6 @@ models_df =
     upper_CI = exp(estimate + 1.96 * std.error)
   ) %>% 
   select(city_state, term, OR, lower_CI,upper_CI)
-
 
 models_df
 ```
@@ -196,7 +195,7 @@ models_df
 Create a plot that shows the estimated ORs and CIs for each city.
 Organize cities according to estimated OR, and comment on the plot.
 
-\###Step 5: make a polt
+\##Step 5: make a polt
 
 ``` r
 models_df %>% 
@@ -240,3 +239,220 @@ to be solved by men than by women. In addition to the highest estimated
 OR in Albuquerque, it is also clear from this graph that there are many
 cities with wide confidence intervals, such as Fresno,CA, Stockton,CA,
 Albuquerque,NM and Stockton,CA.
+
+\###Problem 3:
+
+\##Step 1: import the data and clean the data.
+
+``` r
+birthweight_df = read_csv("./data/birthweight.csv")
+```
+
+    ## Rows: 4342 Columns: 20
+    ## ── Column specification ────────────────────────────────────────────────────────
+    ## Delimiter: ","
+    ## dbl (20): babysex, bhead, blength, bwt, delwt, fincome, frace, gaweeks, malf...
+    ## 
+    ## ℹ Use `spec()` to retrieve the full column specification for this data.
+    ## ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+
+``` r
+birthweight_df = 
+  birthweight_df %>% 
+  janitor::clean_names() %>% 
+  drop_na() %>% 
+  filter(frace != "Unknown") %>%
+ mutate(
+    babysex = case_when(babysex == 1 ~ "male",babysex == 2 ~ "female"),
+    malform = case_when(malform == 0 ~ "absent",malform == 1 ~ "present"),
+    frace = case_when(frace == 1 ~ "White",frace == 2 ~ "Black",frace == 3 ~ "Asian",frace == 4 ~ "Puerto Rican",frace == 8 ~ "Other"),
+    mrace = case_when(mrace == 1 ~ "White",mrace == 2 ~ "Black",mrace == 3 ~ "Asian",mrace == 4 ~ "Puerto Rican",mrace == 8 ~ "Other")
+  ) %>% 
+ mutate(
+    babysex = as.factor(babysex),
+    frace = as.factor(frace),
+    malform = as.factor(malform),
+    mrace = as.factor(mrace)
+    ) 
+sum(is.na(birthweight_df))
+```
+
+    ## [1] 0
+
+``` r
+birthweight_df
+```
+
+    ## # A tibble: 4,342 × 20
+    ##    babysex bhead blength   bwt delwt fincome frace gaweeks malform menarche
+    ##    <fct>   <dbl>   <dbl> <dbl> <dbl>   <dbl> <fct>   <dbl> <fct>      <dbl>
+    ##  1 female     34      51  3629   177      35 White    39.9 absent        13
+    ##  2 male       34      48  3062   156      65 Black    25.9 absent        14
+    ##  3 female     36      50  3345   148      85 White    39.9 absent        12
+    ##  4 male       34      52  3062   157      55 White    40   absent        14
+    ##  5 female     34      52  3374   156       5 White    41.6 absent        13
+    ##  6 male       33      52  3374   129      55 White    40.7 absent        12
+    ##  7 female     33      46  2523   126      96 Black    40.3 absent        14
+    ##  8 female     33      49  2778   140       5 White    37.4 absent        12
+    ##  9 male       36      52  3515   146      85 White    40.3 absent        11
+    ## 10 male       33      50  3459   169      75 Black    40.7 absent        12
+    ## # … with 4,332 more rows, and 10 more variables: mheight <dbl>, momage <dbl>,
+    ## #   mrace <fct>, parity <dbl>, pnumlbw <dbl>, pnumsga <dbl>, ppbmi <dbl>,
+    ## #   ppwt <dbl>, smoken <dbl>, wtgain <dbl>
+
+Description：There is no missing data. This database totally has 20
+columns and 4342 rows.
+
+Propose a regression model for birthweight. This model may be based on a
+hypothesized structure for the factors that underly birthweight, on a
+data-driven model-building process, or a combination of the two.
+Describe your modeling process and show a plot of model residuals
+against fitted values – use add_predictions and add_residuals in making
+this plot.
+
+\##Step 1: builed a model
+
+Among these variables, I believe that in addition to head circumference,
+length, sex, ength at birth and gestational age, there are other
+variables that can affect the birth weight of an infant, these are
+fincome, smoken and ppbmi. Therefore, I made the following hypothesis:
+1.The higher the monthly household income, the better quality food the
+mother receives and therefore the heavier the baby. 2.Mothers who smoke,
+resulting in babies born with deformities or malnutrition. 3.The higher
+the mother’s pre-pregnancy BMI, the greater the resulting infant weight.
+
+``` r
+model_1 = lm(bwt ~ fincome + smoken + ppbmi, data = birthweight_df)
+broom::tidy(model_1)
+```
+
+    ## # A tibble: 4 × 5
+    ##   term        estimate std.error statistic  p.value
+    ##   <chr>          <dbl>     <dbl>     <dbl>    <dbl>
+    ## 1 (Intercept)  2658.      54.1       49.1  0       
+    ## 2 fincome         3.22     0.294     11.0  1.35e-27
+    ## 3 smoken         -6.16     1.03      -5.97 2.53e- 9
+    ## 4 ppbmi          15.8      2.39       6.58 5.21e-11
+
+``` r
+model_1
+```
+
+    ## 
+    ## Call:
+    ## lm(formula = bwt ~ fincome + smoken + ppbmi, data = birthweight_df)
+    ## 
+    ## Coefficients:
+    ## (Intercept)      fincome       smoken        ppbmi  
+    ##    2657.974        3.223       -6.157       15.752
+
+\##Step 2: use add_predictions and add_residuals in making this plot
+
+``` r
+birthweight_df %>% 
+  add_predictions(model_1) %>% 
+  add_residuals(model_1) %>% 
+  ggplot(aes(x = pred, y = resid)) + 
+  geom_point(alpha = .5) +
+  geom_smooth(method = "lm") + 
+  labs(title = "Figure 2:Fitted values against residuals", 
+       x = "Fitted values", 
+       y = "Residuals")
+```
+
+    ## `geom_smooth()` using formula 'y ~ x'
+
+<img src="p8105_hw6_REN-XIN_files/figure-gfm/unnamed-chunk-8-1.png" width="90%" />
+
+Description：The residuals are distributed around 0 along the fitted
+values - without showing any pattern associated with the fitted values.
+
+\##Step 3: Compare your model to two others:
+
+``` r
+model_2 = lm(bwt ~ blength + gaweeks, data = birthweight_df)
+  model_2 %>%
+  broom::tidy()
+```
+
+    ## # A tibble: 3 × 5
+    ##   term        estimate std.error statistic  p.value
+    ##   <chr>          <dbl>     <dbl>     <dbl>    <dbl>
+    ## 1 (Intercept)  -4348.      98.0      -44.4 0       
+    ## 2 blength        129.       1.99      64.6 0       
+    ## 3 gaweeks         27.0      1.72      15.7 2.36e-54
+
+``` r
+model_3 = lm(bwt ~ bhead + babysex + blength + bhead * babysex + bhead * blength + babysex * blength + babysex * blength * bhead, data = birthweight_df)
+  model_3 %>% 
+  broom::tidy()
+```
+
+    ## # A tibble: 8 × 5
+    ##   term                      estimate std.error statistic    p.value
+    ##   <chr>                        <dbl>     <dbl>     <dbl>      <dbl>
+    ## 1 (Intercept)                -802.    1102.       -0.728 0.467     
+    ## 2 bhead                       -16.6     34.1      -0.487 0.626     
+    ## 3 babysexmale               -6375.    1678.       -3.80  0.000147  
+    ## 4 blength                     -21.6     23.4      -0.926 0.354     
+    ## 5 bhead:babysexmale           198.      51.1       3.88  0.000105  
+    ## 6 bhead:blength                 3.32     0.713     4.67  0.00000317
+    ## 7 babysexmale:blength         124.      35.1       3.52  0.000429  
+    ## 8 bhead:babysexmale:blength    -3.88     1.06     -3.67  0.000245
+
+\##Step 4: Test the model fit
+
+``` r
+set.seed(1)
+cv_df = 
+  crossv_mc(birthweight_df, 100) %>% 
+  mutate(
+    train = map(train, as_tibble),
+    test = map(test, as_tibble)
+  )
+```
+
+\##Step 5: Make this comparison in terms of the cross-validated
+prediction error:
+
+``` r
+cv_df = 
+  cv_df %>% 
+  mutate(
+    model_1 = map(.x = train, ~ lm(bwt ~ fincome + smoken + ppbmi, data = .x)),
+    model_2 = map(.x = train, ~lm(bwt ~ blength + gaweeks, data = .x)),
+    model_3 = map(.x = train, ~lm(bwt ~ bhead + babysex + blength + bhead * babysex + bhead * blength + babysex * blength + babysex * blength * bhead, data = .x))
+    )%>% 
+  mutate(
+    rmse_model_1 = map2_dbl(.x = model_1, .y = test, ~rmse(model = .x, data = .y)),
+    rmse_model_2 = map2_dbl(.x = model_2, .y = test, ~rmse(model = .x, data = .y)),
+    rmse_model_3 = map2_dbl(.x = model_3, .y = test, ~rmse(model = .x, data = .y))
+  )
+```
+
+\##Step 6:Draw a violin plot:
+
+``` r
+cv_df %>% 
+  select(starts_with("rmse")) %>% 
+  pivot_longer(
+    everything(),
+    names_to = "model",
+    values_to = "rmse",
+    names_prefix = "rmse_") %>% 
+  ggplot(aes(x = model, y = rmse)) +
+  labs(
+    title = 'Figure 3:Three Models',
+    x = 'Model',
+    y = 'rmse')+
+   geom_violin()
+```
+
+<img src="p8105_hw6_REN-XIN_files/figure-gfm/unnamed-chunk-13-1.png" width="90%" />
+
+Description：The graph above compares the prediction errors of the three
+models and we clearly find that model_3 is the best model because it has
+the lowest RMSE value compared to the other two models（model_1 and
+model_2). This indicates that using head circumference, length, sex, and
+all interactions is the best model, which also means that it can predict
+the birth weight of the child better than model_1 and model_2.
