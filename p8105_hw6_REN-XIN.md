@@ -4,6 +4,87 @@ P8105_hw6_REN XIN
 
 \###Problem 1:
 
+To obtain a distribution for $\hat{r}^2$, we’ll follow basically the
+same procedure we used for regression coefficients: draw bootstrap
+samples; the a model to each; extract the value I’m concerned with; and
+summarize. Here, we’ll use `modelr::bootstrap` to draw the samples and
+`broom::glance` to produce `r.squared` values.
+
+``` r
+weather_df = 
+  rnoaa::meteo_pull_monitors(
+    c("USW00094728"),
+    var = c("PRCP", "TMIN", "TMAX"), 
+    date_min = "2017-01-01",
+    date_max = "2017-12-31") %>%
+  mutate(
+    name = recode(id, USW00094728 = "CentralPark_NY"),
+    tmin = tmin / 10,
+    tmax = tmax / 10) %>%
+  select(name, id, everything())
+```
+
+    ## Registered S3 method overwritten by 'hoardr':
+    ##   method           from
+    ##   print.cache_info httr
+
+    ## using cached file: ~/Library/Caches/R/noaa_ghcnd/USW00094728.dly
+
+    ## date created (size, mb): 2022-12-03 12:17:40 (8.426)
+
+    ## file min/max dates: 1869-01-01 / 2022-11-30
+
+``` r
+weather_df %>% 
+  modelr::bootstrap(n = 1000) %>% 
+  mutate(
+    models = map(strap, ~lm(tmax ~ tmin, data = .x) ),
+    results = map(models, broom::glance)) %>% 
+  select(-strap, -models) %>% 
+  unnest(results) %>% 
+  ggplot(aes(x = r.squared)) + geom_density()
+```
+
+<img src="p8105_hw6_REN-XIN_files/figure-gfm/unnamed-chunk-1-1.png" width="90%" />
+
+In this example, the $\hat{r}^2$ value is high, and the upper bound at 1
+may be a cause for the generally skewed shape of the distribution. If we
+wanted to construct a confidence interval for $R^2$, we could take the
+2.5% and 97.5% quantiles of the estimates across bootstrap samples.
+However, because the shape isn’t symmetric, using the mean +/- 1.96
+times the standard error probably wouldn’t work well.
+
+We can produce a distribution for $\log(\beta_0 * \beta1)$ using a
+similar approach, with a bit more wrangling before we make our plot.
+
+``` r
+weather_df %>% 
+  modelr::bootstrap(n = 1000) %>% 
+  mutate(
+    models = map(strap, ~lm(tmax ~ tmin, data = .x) ),
+    results = map(models, broom::tidy)) %>% 
+  select(-strap, -models) %>% 
+  unnest(results) %>% 
+  select(id = `.id`, term, estimate) %>% 
+  pivot_wider(
+    names_from = term, 
+    values_from = estimate) %>% 
+  rename(beta0 = `(Intercept)`, beta1 = tmin) %>% 
+  mutate(log_b0b1 = log(beta0 * beta1)) %>% 
+  ggplot(aes(x = log_b0b1)) + geom_density()
+```
+
+<img src="p8105_hw6_REN-XIN_files/figure-gfm/unnamed-chunk-2-1.png" width="90%" />
+
+As with $r^2$, this distribution is somewhat skewed and has some
+outliers.
+
+The point of this is not to say you should always use the bootstrap –
+it’s possible to establish “large sample” distributions for strange
+parameters / values / summaries in a lot of cases, and those are great
+to have. But it is helpful to know that there’s a way to do inference
+even in tough cases.
+
 \###Problem 2:
 
 \##Step 1: import the data.
@@ -211,7 +292,7 @@ models_df %>%
        x = "City")
 ```
 
-<img src="p8105_hw6_REN-XIN_files/figure-gfm/unnamed-chunk-5-1.png" width="90%" />
+<img src="p8105_hw6_REN-XIN_files/figure-gfm/unnamed-chunk-7-1.png" width="90%" />
 
 ``` r
 models_df
@@ -362,7 +443,7 @@ birthweight_df %>%
 
     ## `geom_smooth()` using formula 'y ~ x'
 
-<img src="p8105_hw6_REN-XIN_files/figure-gfm/unnamed-chunk-8-1.png" width="90%" />
+<img src="p8105_hw6_REN-XIN_files/figure-gfm/unnamed-chunk-10-1.png" width="90%" />
 
 Description：The residuals are distributed around 0 along the fitted
 values - without showing any pattern associated with the fitted values.
@@ -448,7 +529,7 @@ cv_df %>%
    geom_violin()
 ```
 
-<img src="p8105_hw6_REN-XIN_files/figure-gfm/unnamed-chunk-13-1.png" width="90%" />
+<img src="p8105_hw6_REN-XIN_files/figure-gfm/unnamed-chunk-15-1.png" width="90%" />
 
 Description：The graph above compares the prediction errors of the three
 models and we clearly find that model_3 is the best model because it has
